@@ -1,0 +1,27 @@
+load goodFiles.mat %Load filenames
+load goodAges.mat %Load file ages
+
+goodages=ages>16;%Specify age range of mean scan
+fnames=fnames(goodages);
+ages=ages(goodages);
+
+depth=spm_read_vols(spm_vol('depth-wc4bm2.nii'));%Load depth map
+thickness=spm_read_vols(spm_vol('thick-wc4bm2.nii'));%Load thickness map
+fractionaldepth=depth./thickness;%Divide depth map by thickness map to create fractional depth map
+
+
+wmask=spm_read_vols(spm_vol('wmmaskv1v2.nii'));%Load white matter mask
+wmask=wmask>0.7;
+
+ratio=zeros([213 251 170]);%Create image template
+
+for x=1:numel(fnames)%Add each file, then divide each voxel by the number of files
+    myelin=spm_read_vols(spm_vol(char(fullfile('allMaps',fnames(x)))));
+    white=myelin(wmask);
+    avWhite=median(white,'omitnan');
+    myelin=myelin/avWhite;%Normalise scans by dividing my median WM value
+    ratio=ratio+myelin;
+end
+
+ratio=ratio/numel(fnames);
+niftiwrite(ratio,'MeanMap.nii')
