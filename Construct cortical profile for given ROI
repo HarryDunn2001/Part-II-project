@@ -1,0 +1,52 @@
+Region='AuCM';%Define region
+
+depth=spm_read_vols(spm_vol('depth-wc4bm2.nii'));%Load depth map
+thickness=spm_read_vols(spm_vol('thick-wc4bm2.nii'));%Load thickness map
+fractionaldepth=depth./thickness;%Divide depth map by thickness map to create fractional depth map
+
+myelin=spm_read_vols(spm_vol('fiveMinusRatio.nii'));%Load pre-pubertal mean map
+
+rois=spm_read_vols(spm_vol('cx10m2d.nii'));%Load digital reconstruction of stereotaxic atlas
+
+load('newroiinfo.mat');%Load corresponding information about each ROI defined by stereotaxic atlas
+ROI=find(ismember(roiinfo.name,Region));
+ROI=roiinfo(ROI,2);
+ROI=table2array(ROI);
+ROI=ROI(1);%Change to 2 for right
+
+valuesYoung=zeros([1 20]);
+
+for i=1:20%Divide the cortex into 20 bins of width 0.05, and calculate the mean value within each bin
+    mask=fractionaldepth>(i-1)*0.05 & fractionaldepth<i*0.05 & rois==ROI;
+    myelins=myelin(mask);
+    valuesYoung(i)=mean(myelins(:),'omitnan');
+    errorsYoung(i)=std(myelins(:),'omitnan')/sqrt(sum(mask,'all'));%Calculate standard error of the mean for each bin
+end
+
+
+myelin=spm_read_vols(spm_vol('twelvePlusRatio.nii'));%Load post-pubertal mean map
+
+valuesOld=zeros([1 20]);
+
+for i=1:20%Repeat analysis for post-pubertal mean map
+    mask=fractionaldepth>(i-1)*0.05 & fractionaldepth<i*0.05 & rois==ROI;
+    myelins=myelin(mask);
+    valuesOld(i)=mean(myelins(:),'omitnan');
+    errorsOld(i)=std(myelins(:),'omitnan')/sqrt(sum(mask,'all'));
+end
+
+percentages=2.5:5:97.5;
+
+hold on
+patch([0.45 0.45 0.85 0.85],[10 15 15 10], [0.9 0.9 0.9])
+patch([0.45 0.45 0.85 0.85],[40 50 50 40], [0.9 0.9 0.9])
+patch([0.45 0.45 0.85 0.85],[70 100 100 70], [0.9 0.9 0.9])
+
+%Plot both profiles
+errorbar(valuesYoung,percentages,errorsYoung,'horizontal','r','LineWidth',2)
+errorbar(valuesOld,percentages,errorsOld,'horizontal','b','LineWidth',2)
+
+set(gca,'XAxisLocation','top','YAxisLocation','left','ydir','reverse','Fontsize',12,'linewidth',2,'box','off','FontName','Times New Roman');
+xlabel('MTsat / PU')
+ylabel('Depth / %')
+axis([0.45 0.85 0 100])
