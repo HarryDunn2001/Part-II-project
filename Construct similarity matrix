@@ -1,0 +1,64 @@
+myelin=spm_read_vols(spm_vol('twelvePlusRatio.nii'));%Load mean scan
+
+load goodFiles.mat %Load filenames
+load goodAges.mat %Load file ages
+
+depth=spm_read_vols(spm_vol('depth-wc4bm2.nii'));%Load depth map
+thickness=spm_read_vols(spm_vol('thick-wc4bm2.nii'));%Load thickness map
+fractionaldepth=depth./thickness;%Divide depth map by thickness map to create fractional depth map
+
+rois=spm_read_vols(spm_vol('cx10m2d.nii'));%Load digital reconstruction of stereotaxic atlas
+load('newroiinfo.mat');%Load corresponding information about each ROI defined by stereotaxic atlas
+ROInumbers=roiinfo(1:end,"roinum");
+ROInames=roiinfo(1:end,"name");
+ROIside=roiinfo(1:end,"side");
+
+ROInumbers=table2array(ROInumbers);
+ROInames=table2array(ROInames);
+ROIside=table2array(ROIside);
+
+regionProfiles=zeros([numel(ROInames) 16]);
+mat=[];
+
+for y=1:numel(ROInumbers)%Calculate the cortical profile for every ROI in the scan
+        myelinRange=zeros([1 20]);
+        for z=1:20
+            mask= ROInumbers(y)==rois & fractionaldepth>(0.05*(z-1)) & fractionaldepth<(0.05*z);
+            meanMyelin=mean(myelin(mask),'omitnan');
+            myelinRange(z)=meanMyelin;
+        end
+        myelinRange=myelinRange(5:end);
+        regionProfiles(y,:)=myelinRange;
+end
+
+rows = any(isnan(regionProfiles),2);%Remove cortical profiles with NaNs
+regionProfiles(rows,:)=[];
+
+ROInames(rows)=[];
+ROInumbers(rows)=[];
+ROIside(rows)=[];
+
+for i=1:numel(ROInumbers)%Calculate the PCC between every pair of cortical profiles to form a similarity matrix
+     for j=1:i%-1
+         mat(i,j)=corr2(regionProfiles(i,:),regionProfiles(j,:));
+         mat(j,i)=corr2(regionProfiles(i,:),regionProfiles(j,:));
+     end
+end
+
+for z=1:length(ROInumbers)
+    q=z;
+    mat(z,q)=0;
+end
+     
+affiliationVector=[];
+affiliationVector=community_louvain(mat,1,[],'negative_sym');%Apply modularity algorithm to similarity matrix using BCT
+[names newMatrix]=reorder_mod(mat,affiliationVector);%Reorder similarity matrix by similarity; similar regions placed in proximity
+
+for z=1:length(ROInumbers)
+    q=z;
+    newMatrix(z,q)=1;
+end
+
+figure,imagesc(newMatrix); colorbar; colormap jet; caxis([prctile(newMatrix,3,'all')  prctile(newMatrix,97,'all')]);
+set(gca,'xtick',1:length(ROInames), 'xticklabel', ROInames(names),'ytick',1:length(ROInames), 'yticklabel', ROInames(names));
+colorbar('southoutside')
