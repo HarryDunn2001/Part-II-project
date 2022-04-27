@@ -1,0 +1,48 @@
+load goodFiles.mat %Load filenames
+load goodAges.mat %Load file ages
+
+depth=spm_read_vols(spm_vol('depth-wc4bm2.nii'));%Load depth map
+thickness=spm_read_vols(spm_vol('thick-wc4bm2.nii'));%Load thickness map
+
+gmask=spm_read_vols(spm_vol('gmaskm2.nii'));%Load GM mask
+gmask=gmask>0.7;
+
+voxels=find(gmask);%Using the GM mask, identify the voxels in the scan that correspond to GM
+
+wmask=spm_read_vols(spm_vol('wmmaskv1v2.nii'));%Load WM mask
+wmask=wmask>0.7;
+
+selectAges= ages>3 & ages<30;%Define age range
+fnames=fnames(selectAges);
+ages=ages(selectAges);
+
+imgdata=zeros([numel(fnames) numel(voxels)]);
+
+for x=1:numel(fnames)%For each scan, find the value of every GM voxel
+    myelin=spm_read_vols(spm_vol(char(fullfile('allMaps',fnames(x)))));
+    white=myelin(wmask);
+    avWhite=median(white,'omitnan');
+    myelin=myelin/avWhite;
+    imgdata(x,:)=myelin(gmask);
+end
+
+bk=[];
+
+for y=1:numel(voxels)%Fit a linear regression line to every GM voxel across all scans 
+    agesLoop=ages;
+    dat=imgdata(:,y);
+    badRows=isnan(dat);
+    agesLoop(badRows)=[];
+    dat(badRows)=[];
+    coefs=polyfit(agesLoop,dat,1);
+    bk(y)=coefs(1);
+    %linearModel=fitlm(agesLoop,dat);
+    %R2=linearModel.Rsquared;
+    %bk(y)=R2.Ordinary;
+end
+
+outputImage=zeros([213 251 170]);
+outputImage(voxels)=bk;%Assign the value of every GM voxel in a template image to the gradient of its regression line across all scans
+
+figure,imagesc(squeeze(outputImage)); colormap jet; colorbar; caxis([prctile(bk,3) prctile(bk,97)]);
+axis image off
