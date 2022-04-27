@@ -1,0 +1,30 @@
+depth=spm_read_vols(spm_vol('depth-wc4bm2.nii'));%Load depth map
+thickness=spm_read_vols(spm_vol('thick-wc4bm2.nii'));%Load thickness map
+fractionaldepth=depth./thickness;%Divide depth map by thickness map to create fractional depth map
+
+myelin=spm_read_vols(spm_vol('twelvePlusRatio.nii'));%Load mean map
+rois=spm_read_vols(spm_vol('cx10m2d.nii'));%Load digital reconstruction of stereotaxic atlas
+
+
+load marmcxm2.mat%Load surface map function
+
+load('newroiinfo.mat');%Load corresponding information about each ROI defined by stereotaxic atlas
+ROInumbers=roiinfo.roinum;
+mask=zeros(213,251,170);
+
+mask=fractionaldepth>0 & fractionaldepth< 1;%Define depth range that the surface map will average over
+
+cdata=marmcxdmask(myelin,mask,0.5,marmcx);%Create surface map
+p=patch('faces',marmcx.f,'vertices',marmcx.v,'facecolor','interp','edgecolor','none','facevertexcdata',cdata);
+
+view(3);
+axis image off
+axis vis3d
+material dull 
+
+caxis([prctile(myelin(mask),3) prctile(myelin(mask),97)]);%Saturate below 3rd percentile and above 97th percentile
+caxis([0.55 0.9])
+colormap jet
+light
+colorbar('location','south')
+set(gca,'Fontsize',20,'FontName','Times New Roman');
